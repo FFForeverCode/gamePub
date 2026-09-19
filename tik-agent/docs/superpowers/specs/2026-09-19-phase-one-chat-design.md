@@ -56,7 +56,17 @@ tik-agent 一期以最小可用的单用户聊天系统为目标，完成从浏�
 
 ### 3.2 总体架构
 
-项目保持单仓库，前后端独立构建，后端采用模块化单体：
+项目保持单仓库，前后端独立构建。代码目录固定为：
+
+```text
+tik-agent/
+  server/          Spring Boot 后端及 Spring AI Agent
+  ui/              React 前端
+  docs/            设计、实施与部署文档
+  docker-compose.yml
+```
+
+`server` 采用模块化单体，不创建独立的 Agent 服务或额外后端工程：
 
 ```text
 React Web
@@ -86,10 +96,10 @@ Spring Boot
 
 ### 4.1 前端
 
-建议目录：
+前端文件统一放在 `tik-agent/ui`，建议目录：
 
 ```text
-web/src/
+ui/src/
   api/             REST 客户端与 SSE 解析器
   components/      会话侧栏、消息列表、输入区、模型选择器
   hooks/           会话加载与流式聊天状态
@@ -102,7 +112,7 @@ web/src/
 
 ### 4.2 后端
 
-建议包结构：
+后端与 Agent 文件统一放在 `tik-agent/server`。Agent 是后端内部模块，建议包结构：
 
 ```text
 com.gamepub.server
@@ -277,7 +287,7 @@ Caffeine 以会话 ID 为键保存最近 20 条可用于模型上下文的消息
 
 Docker Compose 包含：
 
-- `web`：Nginx 托管前端静态文件，并将 `/api` 反向代理到后端，关闭 SSE 响应缓冲。
+- `ui`：由 `tik-agent/ui` 构建，使用 Nginx 托管前端静态文件，并将 `/api` 反向代理到后端，关闭 SSE 响应缓冲。
 - `server`：Spring Boot 应用，等待 MySQL 健康后启动并执行 Flyway。
 - `mysql`：MySQL 8，使用命名卷保存数据。
 
