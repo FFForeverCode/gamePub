@@ -45,7 +45,7 @@ tik-agent 一期以最小可用的单用户聊天系统为目标，完成从浏�
 | 前端 | React、Vite、TypeScript | 单页聊天应用 |
 | 前端数据请求 | Fetch API | REST 请求与 POST SSE 流解析 |
 | 后端 | Java 17、Spring Boot | HTTP API、业务编排和配置管理 |
-| 模型接入 | Spring AI | OpenAI 兼容模型的流式调用 |
+| Agent 框架 | Spring AI | Agent 会话、提示词、消息抽象及流式模型调用 |
 | 流式传输 | Spring MVC `SseEmitter`、Reactor `Flux` | 向浏览器推送模型增量 |
 | 持久层 | MyBatis | Mapper 接口与 XML SQL |
 | 数据库 | MySQL 8 | 会话和消息历史 |
@@ -65,18 +65,18 @@ React Web
 Spring Boot
    |-- conversation  会话及历史消息管理
    |-- chat          上下文组装、流式编排和生成任务管理
-   |-- model         模型目录、Mock 与 OpenAI 兼容适配器
+   |-- agent         Spring AI Agent、模型目录及 Mock 适配器
    `-- persistence   MyBatis Mapper、实体及数据库迁移
           |
           v
         MySQL
 ```
 
-`conversation`、`chat` 和 `model` 通过明确的 Service 接口协作。Controller 不直接调用 Mapper，模型实现也不负责消息落库。
+`conversation`、`chat` 和 `agent` 通过明确的 Service 接口协作。Controller 不直接调用 Mapper，Spring AI Agent 也不负责消息落库。
 
 ### 3.3 选型说明
 
-采用模块化单体是因为一期业务规模有限，独立模型网关会增加部署与故障处理成本。模型层保留统一接口，后续确有独立扩缩容需求时可迁移为单独服务。
+采用模块化单体是因为一期业务规模有限，独立模型网关会增加部署与故障处理成本。Agent 能力统一使用 Spring AI 实现，不引入另一套 Agent 编排框架；后续确有独立扩缩容需求时，可将 Spring AI Agent 模块迁移为单独服务。
 
 持久层采用原生 MyBatis Mapper 加 XML SQL。它便于明确控制会话列表、最近消息和序号分配等查询，并避免 ORM 隐式行为。Flyway 单独负责表结构演进。
 
@@ -109,15 +109,16 @@ com.gamepub.server
   common/          错误码、统一异常响应、基础配置
   conversation/    Controller、Service、DTO、Mapper、Entity
   chat/            流式编排、生成任务注册表、短期记忆
-  model/           ModelProvider、模型目录及具体实现
+  agent/           Spring AI ChatClient、模型目录及 Mock 适配器
 ```
 
 关键边界：
 
 - `ConversationService`：管理会话和历史查询。
-- `ChatService`：校验生成状态、保存用户消息、构造上下文、驱动模型流并完成助手消息。
+- `ChatService`：校验生成状态、保存用户消息、读取上下文、驱动 Agent 流并完成助手消息。
 - `ShortTermMemory`：按会话读取或重建最近消息，不承担持久化职责。
-- `ModelProvider`：接收标准消息上下文，返回 `Flux<String>` 增量。
+- `SpringAiAgentService`：使用 Spring AI `ChatClient` 组装系统提示词与历史消息，并返回 `Flux<String>` 增量。
+- `ChatClientRegistry`：按模型 ID 管理 Spring AI `ChatModel` 和 `ChatClient`，提供统一的模型选择入口。
 - `GenerationRegistry`：记录会话当前生成任务，保证每个会话最多一个活动流，并处理取消。
 
 ## 5. 数据设计
@@ -224,7 +225,7 @@ data: {"message": {...}}
 2. 在事务中写入用户消息和状态为 `STREAMING` 的助手消息，同时更新会话时间及默认标题。
 3. 注册生成任务，向前端发送 `message` 事件。
 4. 从 Caffeine 获取最近上下文；未命中时从 MySQL 加载最近 20 条已完成消息。
-5. 调用对应 `ModelProvider`，把模型增量同时追加到内存缓冲并发送 `delta` 事件。
+5. `SpringAiAgentService` 将上下文映射为 Spring AI `Message`，通过对应 `ChatClient` 发起流式调用，并把增量同时追加到内存缓冲及发送为 `delta` 事件。
 6. 正常结束时将完整助手消息一次性更新为 `COMPLETED`，更新短期记忆并发送 `complete`。
 7. 模型异常时保存已经生成的内容，将消息更新为 `FAILED`，发送 `error`。
 8. 浏览器取消或连接断开时取消上游订阅，将消息更新为 `CANCELLED`；若连接仍可写则发送 `cancelled`。
@@ -241,22 +242,21 @@ Caffeine 以会话 ID 为键保存最近 20 条可用于模型上下文的消息
 - 缓存未命中时从数据库加载最近消息并按正序重建。
 - 删除会话时同步失效缓存；完成一轮问答后增量更新缓存。
 
-数量、过期时间和最大会话数通过应用配置及环境变量覆盖。Token 上限截断由模型适配器在发送前执行，一期先按消息条数限制上下文。
+数量、过期时间和最大会话数通过应用配置及环境变量覆盖。Token 上限截断由 Spring AI Agent 模块在发送前执行，一期先按消息条数限制上下文。
 
-## 9. 模型适配
+## 9. Spring AI Agent 与模型适配
 
-统一接口语义如下：
+一期 Agent 框架统一使用 Spring AI。`SpringAiAgentService` 负责通过 `ChatClient` 组织系统提示词、历史消息和当前问题，并使用 Spring AI 流式 API 返回内容增量。业务代码不直接拼装供应商请求，也不自行解析上游模型的 SSE 协议。
 
-```java
-interface ModelProvider {
-    String providerId();
-    Flux<String> stream(ChatModelRequest request);
-}
-```
+一期的 Agent 是单轮驱动、携带多轮上下文的对话 Agent，不包含工具调用、规划器或多 Agent 协作。后续增加 Tool Calling、Advisor、RAG 等能力时继续沿用 Spring AI 扩展机制。
 
-- `MockModelProvider`：无需网络或密钥，按固定间隔输出可预测分片，用于本地演示和自动化测试。
-- `OpenAiCompatibleModelProvider`：由 Spring AI 驱动，读取模型名称、Base URL、API Key、超时等配置。
-- `ModelCatalog`：根据配置生成前端可选模型列表，并按 `modelId` 路由到提供方。
+- `ChatClientRegistry`：根据配置为每个可用模型创建并注册 Spring AI `ChatModel` 与 `ChatClient`，按 `modelId` 路由。
+- `SpringAiAgentService`：将领域消息转换为 Spring AI `UserMessage`、`AssistantMessage` 和 `SystemMessage`，调用 `ChatClient.prompt().messages(...).stream().content()` 获得 `Flux<String>`。
+- `MockAgentClient`：无需网络或密钥，按固定间隔输出可预测分片，仅用于本地演示和自动化测试；它实现与 Agent 服务边界一致的测试适配器，不构成第二套 Agent 框架。
+- OpenAI 兼容模型：通过 Spring AI OpenAI Starter 创建 `ChatModel`，读取模型名称、Base URL、API Key、温度和超时等配置。
+- `ModelCatalog`：生成前端可选模型列表；未完成配置的真实模型不会注册。
+
+系统提示词由后端配置提供，一期使用单一默认模板。提示词配置、Spring AI 对话消息和供应商参数均封装在 `agent` 模块中，`chat` 模块只传入标准会话上下文与所选模型 ID。
 
 密钥只从环境变量读取，不写入代码、镜像或版本库。日志不记录 API Key、完整提示词或完整模型回答。
 
