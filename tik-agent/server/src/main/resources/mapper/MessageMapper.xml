@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.gamepub.server.conversation.MessageMapper">
+    <resultMap id="MessageMap" type="com.gamepub.server.conversation.Message">
+        <id property="id" column="id"/>
+        <result property="conversationId" column="conversation_id"/>
+        <result property="role" column="role"/>
+        <result property="content" column="content"/>
+        <result property="status" column="status"/>
+        <result property="modelId" column="model_id"/>
+        <result property="sequenceNo" column="sequence_no"/>
+        <result property="errorCode" column="error_code"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.gamepub.server.conversation.Message" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO messages
+        (conversation_id, role, content, status, model_id, sequence_no, error_code, created_at, updated_at)
+        VALUES
+        (#{conversationId}, #{role}, #{content}, #{status}, #{modelId}, #{sequenceNo}, #{errorCode}, #{createdAt}, #{updatedAt})
+    </insert>
+
+    <select id="findById" resultMap="MessageMap">
+        SELECT id, conversation_id, role, content, status, model_id, sequence_no, error_code, created_at, updated_at
+        FROM messages WHERE id = #{id}
+    </select>
+
+    <select id="findMaxSequenceNo" resultType="long">
+        SELECT COALESCE(MAX(sequence_no), 0) FROM messages WHERE conversation_id = #{conversationId}
+    </select>
+
+    <select id="findByConversationId" resultMap="MessageMap">
+        SELECT id, conversation_id, role, content, status, model_id, sequence_no, error_code, created_at, updated_at
+        FROM messages WHERE conversation_id = #{conversationId}
+        ORDER BY sequence_no ASC
+    </select>
+
+    <select id="findRecentCompleted" resultMap="MessageMap">
+        SELECT * FROM (
+            SELECT id, conversation_id, role, content, status, model_id, sequence_no, error_code, created_at, updated_at
+            FROM messages
+            WHERE conversation_id = #{conversationId} AND status = 'COMPLETED'
+            ORDER BY sequence_no DESC
+            LIMIT #{limit}
+        ) recent
+        ORDER BY sequence_no ASC
+    </select>
+
+    <update id="finish">
+        UPDATE messages
+        SET content = #{content}, status = #{status}, error_code = #{errorCode}, updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <update id="failStaleStreaming">
+        UPDATE messages
+        SET status = 'FAILED', error_code = #{errorCode}, updated_at = #{updatedAt}
+        WHERE status = 'STREAMING' AND updated_at &lt; #{cutoff}
+    </update>
+</mapper>

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.gamepub.server.conversation.ConversationMapper">
+    <resultMap id="ConversationMap" type="com.gamepub.server.conversation.Conversation">
+        <id property="id" column="id"/>
+        <result property="title" column="title"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.gamepub.server.conversation.Conversation" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO conversations (title, created_at, updated_at)
+        VALUES (#{title}, #{createdAt}, #{updatedAt})
+    </insert>
+
+    <select id="findById" resultMap="ConversationMap">
+        SELECT id, title, created_at, updated_at
+        FROM conversations WHERE id = #{id}
+    </select>
+
+    <select id="findPage" resultMap="ConversationMap">
+        SELECT id, title, created_at, updated_at
+        FROM conversations
+        <where>
+            <if test="beforeId != null">
+                (updated_at, id) &lt; (
+                    SELECT updated_at, id FROM conversations WHERE id = #{beforeId}
+                )
+            </if>
+        </where>
+        ORDER BY updated_at DESC, id DESC
+        LIMIT #{limit}
+    </select>
+
+    <update id="rename">
+        UPDATE conversations SET title = #{title}, updated_at = #{updatedAt} WHERE id = #{id}
+    </update>
+
+    <update id="touch">
+        UPDATE conversations SET updated_at = #{updatedAt} WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM conversations WHERE id = #{id}
+    </delete>
+</mapper>

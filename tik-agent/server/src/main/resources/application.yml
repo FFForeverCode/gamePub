@@ -1,1 +1,65 @@
-spring.application.name=server
+spring:
+  application:
+    name: server
+  autoconfigure:
+    exclude:
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/tik_agent?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
+    username: ${DB_USERNAME:tik_agent}
+    password: ${DB_PASSWORD:tik_agent}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  jackson:
+    time-zone: Asia/Shanghai
+  mvc:
+    async:
+      request-timeout: ${TIK_AGENT_STREAM_TIMEOUT:120s}
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-handlers-package: com.gamepub.server.conversation
+  configuration:
+    map-underscore-to-camel-case: true
+    default-enum-type-handler: org.apache.ibatis.type.EnumTypeHandler
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+tik-agent:
+  chat:
+    max-content-length: ${TIK_AGENT_MAX_CONTENT_LENGTH:10000}
+    stream-timeout: ${TIK_AGENT_STREAM_TIMEOUT:120s}
+  memory:
+    message-limit: ${TIK_AGENT_MEMORY_MESSAGE_LIMIT:20}
+    expire-after-access: ${TIK_AGENT_MEMORY_EXPIRE_AFTER_ACCESS:30m}
+    maximum-size: ${TIK_AGENT_MEMORY_MAXIMUM_SIZE:1000}
+  agent:
+    default-model: ${TIK_AGENT_DEFAULT_MODEL:mock}
+    system-prompt: ${TIK_AGENT_SYSTEM_PROMPT:你是一个简洁、可靠的中文智能助手。请直接回答用户问题。}
+    models:
+      mock:
+        display-name: 本地 Mock
+        provider: mock
+        model-name: mock
+        temperature: 0.2
+        timeout: 30s
+        enabled: true
+      openai:
+        display-name: OpenAI Compatible
+        provider: openai
+        base-url: ${TIK_AGENT_OPENAI_BASE_URL:}
+        api-key: ${TIK_AGENT_OPENAI_API_KEY:}
+        model-name: ${TIK_AGENT_OPENAI_MODEL_NAME:}
+        temperature: ${TIK_AGENT_OPENAI_TEMPERATURE:0.2}
+        timeout: ${TIK_AGENT_OPENAI_TIMEOUT:60s}
+        enabled: ${TIK_AGENT_OPENAI_ENABLED:false}

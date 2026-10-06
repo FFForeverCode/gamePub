@@ -1,0 +1,47 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: tik_agent
+      MYSQL_USER: ${DB_USERNAME:-tik_agent}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-tik_agent}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - tik-agent-mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  server:
+    build:
+      context: ./server
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/tik_agent?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+      DB_USERNAME: ${DB_USERNAME:-tik_agent}
+      DB_PASSWORD: ${DB_PASSWORD:-tik_agent}
+      TIK_AGENT_DEFAULT_MODEL: ${TIK_AGENT_DEFAULT_MODEL:-mock}
+      TIK_AGENT_OPENAI_ENABLED: ${TIK_AGENT_OPENAI_ENABLED:-false}
+      TIK_AGENT_OPENAI_BASE_URL: ${TIK_AGENT_OPENAI_BASE_URL:-}
+      TIK_AGENT_OPENAI_API_KEY: ${TIK_AGENT_OPENAI_API_KEY:-}
+      TIK_AGENT_OPENAI_MODEL_NAME: ${TIK_AGENT_OPENAI_MODEL_NAME:-}
+      TIK_AGENT_OPENAI_TEMPERATURE: ${TIK_AGENT_OPENAI_TEMPERATURE:-0.2}
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  ui:
+    build:
+      context: ./ui
+    ports:
+      - "${UI_PORT:-5173}:80"
+    depends_on:
+      - server
+
+volumes:
+  tik-agent-mysql:
