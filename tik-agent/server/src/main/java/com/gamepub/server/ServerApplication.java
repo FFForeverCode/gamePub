@@ -10,7 +10,7 @@ import org.mybatis.spring.annotation.MapperScan;
 @SpringBootApplication
 @ConfigurationPropertiesScan
 @EnableAsync
-@MapperScan("com.gamepub.server")
+@MapperScan("com.gamepub.server.conversation")
 public class ServerApplication {
 
     public static void main(String[] args) {
