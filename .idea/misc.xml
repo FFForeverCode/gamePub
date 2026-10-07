@@ -9,15 +9,19 @@
       <list>
         <option value="$PROJECT_DIR$/tik-agent/pom.xml" />
         <option value="$PROJECT_DIR$/tik-agent/server/pom.xml" />
+        <option value="$PROJECT_DIR$/market-redemptionCode-framework/market-server/pom.xml" />
+        <option value="$PROJECT_DIR$/market-redemption-code/market-server/pom.xml" />
+        <option value="$PROJECT_DIR$/market-manage/market-manage-server/pom.xml" />
       </list>
     </option>
     <option name="ignoredFiles">
       <set>
+        <option value="$PROJECT_DIR$/tik-agent/server/pom.xml" />
         <option value="$PROJECT_DIR$/tik-agent/tik-agent-core/pom.xml" />
       </set>
     </option>
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="ms-17" project-jdk-type="JavaSDK">
+  <component name="ProjectRootManager" version="2" languageLevel="JDK_17" default="true" project-jdk-name="ms-17" project-jdk-type="JavaSDK">
     <output url="file://$PROJECT_DIR$/out" />
   </component>
 </project>
