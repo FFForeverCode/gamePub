@@ -18,15 +18,32 @@ class TikAgentPropertiesTest {
             .withUserConfiguration(PropertiesConfiguration.class);
 
     @Test
-    void bindsRepresentativeSettingsAndAppliesDefaults() {
+    void bindsApplicationDefaults() {
+        contextRunner.run(context -> {
+            assertThat(context).hasNotFailed();
+            TikAgentProperties properties = context.getBean(TikAgentProperties.class);
+
+            assertThat(properties.memory().maxMessages()).isEqualTo(20);
+            assertThat(properties.memory().tokenBudget()).isPositive();
+            assertThat(properties.stream().checkpointTokenThreshold()).isEqualTo(32);
+            assertThat(properties.stream().checkpointInterval()).isEqualTo(Duration.ofSeconds(1));
+            assertThat(properties.generation().leaseTtl())
+                    .isGreaterThan(properties.generation().leaseRenewInterval());
+            assertThat(properties.agent().models().get("mock").enabled()).isTrue();
+            assertThat(properties.agent().models().get("gemini").enabled()).isFalse();
+        });
+    }
+
+    @Test
+    void bindsRepresentativeOverrides() {
         contextRunner
                 .withPropertyValues(
-                        "tik-agent.memory.max-messages=20",
+                        "tik-agent.memory.max-messages=17",
                         "tik-agent.memory.token-budget=4096",
-                        "tik-agent.stream.checkpoint-token-threshold=32",
-                        "tik-agent.stream.checkpoint-interval=1s",
-                        "tik-agent.generation.lease-ttl=30s",
-                        "tik-agent.generation.lease-renew-interval=10s",
+                        "tik-agent.stream.checkpoint-token-threshold=24",
+                        "tik-agent.stream.checkpoint-interval=2s",
+                        "tik-agent.generation.lease-ttl=40s",
+                        "tik-agent.generation.lease-renew-interval=5s",
                         "tik-agent.agent.models.mock.enabled=true",
                         "tik-agent.agent.models.gemini.enabled=false",
                         "tik-agent.agent.models.gemini.api-key=")
@@ -34,10 +51,10 @@ class TikAgentPropertiesTest {
                     assertThat(context).hasNotFailed();
                     TikAgentProperties properties = context.getBean(TikAgentProperties.class);
 
-                    assertThat(properties.memory().maxMessages()).isEqualTo(20);
-                    assertThat(properties.memory().tokenBudget()).isPositive();
-                    assertThat(properties.stream().checkpointTokenThreshold()).isEqualTo(32);
-                    assertThat(properties.stream().checkpointInterval()).isEqualTo(Duration.ofSeconds(1));
+                    assertThat(properties.memory().maxMessages()).isEqualTo(17);
+                    assertThat(properties.memory().tokenBudget()).isEqualTo(4096);
+                    assertThat(properties.stream().checkpointTokenThreshold()).isEqualTo(24);
+                    assertThat(properties.stream().checkpointInterval()).isEqualTo(Duration.ofSeconds(2));
                     assertThat(properties.generation().leaseTtl())
                             .isGreaterThan(properties.generation().leaseRenewInterval());
                     assertThat(properties.agent().models().get("mock").enabled()).isTrue();
