@@ -88,7 +88,7 @@ tik-agent:
       gemini:
         display-name: Gemini
         provider: gemini
-        api-key: ${TIK_AGENT_GEMINI_API_KEY:}
+        api-key: ${TIK_AGENT_GEMINI_API_KEY:AQ.Ab8RN6L7-mADkMRb2Eqglf5wrM7hS2l0TrqEF1dBsISrE8UPNA}
         model-name: ${TIK_AGENT_GEMINI_MODEL_NAME:gemini-2.5-flash}
         temperature: ${TIK_AGENT_GEMINI_TEMPERATURE:0.2}
         timeout: ${TIK_AGENT_GEMINI_TIMEOUT:60s}
