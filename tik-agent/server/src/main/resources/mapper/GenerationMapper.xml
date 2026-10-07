@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.gamepub.server.conversation.GenerationMapper">
+    <resultMap id="GenerationMap" type="com.gamepub.server.conversation.ChatGeneration">
+        <id property="id" column="id"/>
+        <result property="conversationId" column="conversation_id"/>
+        <result property="clientRequestId" column="client_request_id"/>
+        <result property="userMessageId" column="user_message_id"/>
+        <result property="assistantMessageId" column="assistant_message_id"/>
+        <result property="modelId" column="model_id"/>
+        <result property="status" column="status"/>
+        <result property="fenceEpoch" column="fence_epoch"/>
+        <result property="retryOfGenerationId" column="retry_of_generation_id"/>
+        <result property="errorCode" column="error_code"/>
+        <result property="inputTokenCount" column="input_token_count"/>
+        <result property="outputTokenCount" column="output_token_count"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+        <result property="completedAt" column="completed_at"/>
+    </resultMap>
+
+    <sql id="GenerationColumns">
+        id, conversation_id, client_request_id, user_message_id, assistant_message_id,
+        model_id, status, fence_epoch, retry_of_generation_id, error_code,
+        input_token_count, output_token_count, created_at, updated_at, completed_at
+    </sql>
+
+    <insert id="create" parameterType="com.gamepub.server.conversation.ChatGeneration">
+        INSERT INTO chat_generations
+        (id, conversation_id, client_request_id, user_message_id, assistant_message_id,
+         model_id, status, fence_epoch, retry_of_generation_id, error_code,
+         input_token_count, output_token_count, created_at, updated_at, completed_at)
+        VALUES
+        (#{id}, #{conversationId}, #{clientRequestId}, #{userMessageId}, #{assistantMessageId},
+         #{modelId}, #{status}, #{fenceEpoch}, #{retryOfGenerationId}, #{errorCode},
+         #{inputTokenCount}, #{outputTokenCount}, #{createdAt}, #{updatedAt}, #{completedAt})
+    </insert>
+
+    <select id="findById" resultMap="GenerationMap">
+        SELECT <include refid="GenerationColumns"/>
+        FROM chat_generations WHERE id = #{id}
+    </select>
+
+    <select id="findByClientRequestId" resultMap="GenerationMap">
+        SELECT <include refid="GenerationColumns"/>
+        FROM chat_generations
+        WHERE conversation_id = #{conversationId} AND client_request_id = #{clientRequestId}
+    </select>
+
+    <select id="findActiveByConversationForUpdate" resultMap="GenerationMap">
+        SELECT <include refid="GenerationColumns"/>
+        FROM chat_generations
+        WHERE conversation_id = #{conversationId}
+          AND status IN ('CREATED', 'RUNNING', 'CANCEL_REQUESTED')
+        ORDER BY created_at DESC
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
+    <update id="transitionIfCurrent">
+        UPDATE chat_generations
+        SET status = #{newStatus}, error_code = #{errorCode},
+            input_token_count = #{inputTokenCount}, output_token_count = #{outputTokenCount},
+            updated_at = #{updatedAt},
+            completed_at = CASE WHEN #{newStatus} IN ('COMPLETED', 'FAILED', 'CANCELLED', 'RETRYABLE')
+                                THEN #{updatedAt} ELSE NULL END
+        WHERE id = #{id} AND fence_epoch = #{epoch} AND status = #{expectedStatus}
+    </update>
+
+    <select id="findStaleRunning" resultMap="GenerationMap">
+        SELECT <include refid="GenerationColumns"/>
+        FROM chat_generations
+        WHERE status = 'RUNNING' AND updated_at &lt; #{cutoff}
+        ORDER BY updated_at ASC
+        LIMIT #{limit}
+    </select>
+</mapper>

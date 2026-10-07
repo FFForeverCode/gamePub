@@ -10,6 +10,7 @@ public class Message {
     private MessageStatus status;
     private String modelId;
     private Long sequenceNo;
+    private String generationId;
     private String errorCode;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -46,6 +47,8 @@ public class Message {
     public void setModelId(String modelId) { this.modelId = modelId; }
     public Long getSequenceNo() { return sequenceNo; }
     public void setSequenceNo(Long sequenceNo) { this.sequenceNo = sequenceNo; }
+    public String getGenerationId() { return generationId; }
+    public void setGenerationId(String generationId) { this.generationId = generationId; }
     public String getErrorCode() { return errorCode; }
     public void setErrorCode(String errorCode) { this.errorCode = errorCode; }
     public LocalDateTime getCreatedAt() { return createdAt; }

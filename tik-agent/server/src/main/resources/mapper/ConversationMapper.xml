@@ -4,6 +4,7 @@
     <resultMap id="ConversationMap" type="com.gamepub.server.conversation.Conversation">
         <id property="id" column="id"/>
         <result property="title" column="title"/>
+        <result property="generationEpoch" column="generation_epoch"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
     </resultMap>
@@ -14,12 +15,25 @@
     </insert>
 
     <select id="findById" resultMap="ConversationMap">
-        SELECT id, title, created_at, updated_at
+        SELECT id, title, generation_epoch, created_at, updated_at
         FROM conversations WHERE id = #{id}
     </select>
 
+    <select id="lockForGeneration" resultMap="ConversationMap">
+        SELECT id, title, generation_epoch, created_at, updated_at
+        FROM conversations WHERE id = #{id} FOR UPDATE
+    </select>
+
+    <update id="incrementGenerationEpoch">
+        UPDATE conversations SET generation_epoch = generation_epoch + 1 WHERE id = #{id}
+    </update>
+
+    <select id="findGenerationEpoch" resultType="long">
+        SELECT generation_epoch FROM conversations WHERE id = #{id}
+    </select>
+
     <select id="findPage" resultMap="ConversationMap">
-        SELECT id, title, created_at, updated_at
+        SELECT id, title, generation_epoch, created_at, updated_at
         FROM conversations
         <where>
             <if test="beforeId != null">
