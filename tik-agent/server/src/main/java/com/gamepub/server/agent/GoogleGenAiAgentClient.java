@@ -18,7 +18,7 @@ public final class GoogleGenAiAgentClient implements AgentClient {
     private final ChatClient chatClient;
     private final String systemPrompt;
 
-    private GoogleGenAiAgentClient(ChatClient chatClient, String systemPrompt) {
+    GoogleGenAiAgentClient(ChatClient chatClient, String systemPrompt) {
         this.chatClient = chatClient;
         this.systemPrompt = systemPrompt;
     }
