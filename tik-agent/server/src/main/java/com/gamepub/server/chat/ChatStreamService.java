@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.gamepub.server.common.ErrorCode;
+import com.gamepub.server.agent.AgentStreamChunk;
 import com.gamepub.server.conversation.Message;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
@@ -68,7 +69,7 @@ public class ChatStreamService {
         send(emitter, eventId.incrementAndGet(), "message",
                 SseEventFactory.messageCreated(preparation.pair().userMessage(), assistant));
 
-        Flux<String> stream;
+        Flux<AgentStreamChunk> stream;
         try {
             stream = preparation.client().stream(preparation.context())
                     .timeout(streamTimeout)
@@ -79,8 +80,12 @@ public class ChatStreamService {
         }
 
         Disposable disposable = stream.subscribe(
-                delta -> {
+                chunk -> {
                     if (terminal.get() || handle.isCancelled()) {
+                        return;
+                    }
+                    String delta = chunk.text();
+                    if (delta.isEmpty()) {
                         return;
                     }
                     synchronized (answer) {

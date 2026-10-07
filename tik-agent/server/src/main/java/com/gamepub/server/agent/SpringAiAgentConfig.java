@@ -18,7 +18,18 @@ public class SpringAiAgentConfig {
         Map<String, AgentClient> clients = new LinkedHashMap<>();
         properties.agent().models().forEach((id, model) -> {
             if (!model.enabled() || "mock".equalsIgnoreCase(model.provider())
-                    || isBlank(model.apiKey()) || isBlank(model.baseUrl()) || isBlank(model.modelName())) {
+                    || isBlank(model.modelName())) {
+                return;
+            }
+            if ("gemini".equalsIgnoreCase(model.provider())) {
+                if (!isBlank(model.apiKey())
+                        || (!isBlank(System.getenv("GOOGLE_CLOUD_PROJECT"))
+                        && !isBlank(System.getenv("GOOGLE_CLOUD_LOCATION")))) {
+                    clients.put(id, GoogleGenAiAgentClient.create(model, properties.agent().systemPrompt()));
+                }
+                return;
+            }
+            if (isBlank(model.apiKey()) || isBlank(model.baseUrl())) {
                 return;
             }
             var openAiClient = OpenAIOkHttpClient.builder()
