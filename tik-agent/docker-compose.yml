@@ -16,6 +16,18 @@ services:
       timeout: 5s
       retries: 20
 
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - tik-agent-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   server:
     build:
       context: ./server
@@ -23,16 +35,23 @@ services:
       DB_URL: jdbc:mysql://mysql:3306/tik_agent?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
       DB_USERNAME: ${DB_USERNAME:-tik_agent}
       DB_PASSWORD: ${DB_PASSWORD:-tik_agent}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       TIK_AGENT_DEFAULT_MODEL: ${TIK_AGENT_DEFAULT_MODEL:-mock}
       TIK_AGENT_OPENAI_ENABLED: ${TIK_AGENT_OPENAI_ENABLED:-false}
       TIK_AGENT_OPENAI_BASE_URL: ${TIK_AGENT_OPENAI_BASE_URL:-}
       TIK_AGENT_OPENAI_API_KEY: ${TIK_AGENT_OPENAI_API_KEY:-}
       TIK_AGENT_OPENAI_MODEL_NAME: ${TIK_AGENT_OPENAI_MODEL_NAME:-}
       TIK_AGENT_OPENAI_TEMPERATURE: ${TIK_AGENT_OPENAI_TEMPERATURE:-0.2}
+      TIK_AGENT_GEMINI_ENABLED: ${TIK_AGENT_GEMINI_ENABLED:-false}
+      TIK_AGENT_GEMINI_API_KEY: ${TIK_AGENT_GEMINI_API_KEY:-}
+      TIK_AGENT_GEMINI_MODEL_NAME: ${TIK_AGENT_GEMINI_MODEL_NAME:-gemini-2.5-flash}
     ports:
       - "${SERVER_PORT:-8080}:8080"
     depends_on:
       mysql:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   ui:
@@ -45,3 +64,4 @@ services:
 
 volumes:
   tik-agent-mysql:
+  tik-agent-redis:

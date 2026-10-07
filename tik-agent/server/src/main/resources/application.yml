@@ -9,6 +9,7 @@ spring:
       - org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration
       - org.springframework.ai.model.openai.autoconfigure.OpenAiImageAutoConfiguration
       - org.springframework.ai.model.openai.autoconfigure.OpenAiModerationAutoConfiguration
+      - org.springframework.ai.model.google.genai.autoconfigure.chat.GoogleGenAiChatAutoConfiguration
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/tik_agent?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
     username: ${DB_USERNAME:tik_agent}
@@ -22,6 +23,10 @@ spring:
   mvc:
     async:
       request-timeout: ${TIK_AGENT_STREAM_TIMEOUT:120s}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
 
 mybatis:
   mapper-locations: classpath:mapper/*.xml
@@ -45,9 +50,21 @@ tik-agent:
     max-content-length: ${TIK_AGENT_MAX_CONTENT_LENGTH:10000}
     stream-timeout: ${TIK_AGENT_STREAM_TIMEOUT:120s}
   memory:
-    message-limit: ${TIK_AGENT_MEMORY_MESSAGE_LIMIT:20}
+    max-messages: ${TIK_AGENT_MEMORY_MAX_MESSAGES:20}
+    token-budget: ${TIK_AGENT_MEMORY_TOKEN_BUDGET:4096}
     expire-after-access: ${TIK_AGENT_MEMORY_EXPIRE_AFTER_ACCESS:30m}
     maximum-size: ${TIK_AGENT_MEMORY_MAXIMUM_SIZE:1000}
+  stream:
+    checkpoint-token-threshold: ${TIK_AGENT_STREAM_CHECKPOINT_TOKEN_THRESHOLD:32}
+    checkpoint-interval: ${TIK_AGENT_STREAM_CHECKPOINT_INTERVAL:1s}
+    event-max-length: ${TIK_AGENT_STREAM_EVENT_MAX_LENGTH:10000}
+    event-ttl: ${TIK_AGENT_STREAM_EVENT_TTL:24h}
+    max-output-bytes: ${TIK_AGENT_STREAM_MAX_OUTPUT_BYTES:1048576}
+  generation:
+    lease-ttl: ${TIK_AGENT_GENERATION_LEASE_TTL:30s}
+    lease-renew-interval: ${TIK_AGENT_GENERATION_LEASE_RENEW_INTERVAL:10s}
+    timeout: ${TIK_AGENT_GENERATION_TIMEOUT:120s}
+    max-concurrent-per-instance: ${TIK_AGENT_GENERATION_MAX_CONCURRENT_PER_INSTANCE:1}
   agent:
     default-model: ${TIK_AGENT_DEFAULT_MODEL:mock}
     system-prompt: ${TIK_AGENT_SYSTEM_PROMPT:你是一个简洁、可靠的中文智能助手。请直接回答用户问题。}
@@ -68,3 +85,11 @@ tik-agent:
         temperature: ${TIK_AGENT_OPENAI_TEMPERATURE:0.2}
         timeout: ${TIK_AGENT_OPENAI_TIMEOUT:60s}
         enabled: ${TIK_AGENT_OPENAI_ENABLED:false}
+      gemini:
+        display-name: Gemini
+        provider: gemini
+        api-key: ${TIK_AGENT_GEMINI_API_KEY:}
+        model-name: ${TIK_AGENT_GEMINI_MODEL_NAME:gemini-2.5-flash}
+        temperature: ${TIK_AGENT_GEMINI_TEMPERATURE:0.2}
+        timeout: ${TIK_AGENT_GEMINI_TIMEOUT:60s}
+        enabled: ${TIK_AGENT_GEMINI_ENABLED:false}
