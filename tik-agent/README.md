@@ -45,7 +45,7 @@ Docker 方式：
 
 - Docker Desktop 或兼容的 Docker Engine
 - Docker Compose v2
-- 可用端口：`5173`、`8080`、`3306`
+- 可用端口：`5173`、`8080`、`3307`
 
 本地开发方式还需要：
 
@@ -79,7 +79,7 @@ cp .env.example .env
 DB_USERNAME=tik_agent
 DB_PASSWORD=tik_agent
 DB_ROOT_PASSWORD=root
-MYSQL_PORT=3306
+MYSQL_PORT=3307
 SERVER_PORT=8080
 UI_PORT=5173
 TIK_AGENT_DEFAULT_MODEL=mock
@@ -142,7 +142,7 @@ docker compose ps mysql
 等待 MySQL 显示 `healthy` 后，再启动后端。默认 JDBC 配置为：
 
 ```text
-jdbc:mysql://localhost:3306/tik_agent
+jdbc:mysql://localhost:3307/tik_agent
 用户名：tik_agent
 密码：tik_agent
 ```
@@ -150,7 +150,7 @@ jdbc:mysql://localhost:3306/tik_agent
 如果你使用了其他数据库实例，可以通过环境变量覆盖：
 
 ```bash
-export DB_URL='jdbc:mysql://127.0.0.1:3306/tik_agent?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai'
+export DB_URL='jdbc:mysql://127.0.0.1:3307/tik_agent?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai'
 export DB_USERNAME=tik_agent
 export DB_PASSWORD=tik_agent
 ```
@@ -208,14 +208,14 @@ Docker Compose 使用 `docker-compose.yml` 中的 MySQL 服务创建：
 | `DB_USERNAME` | `tik_agent` | 应用数据库用户 |
 | `DB_PASSWORD` | `tik_agent` | 应用数据库密码 |
 | `DB_ROOT_PASSWORD` | `root` | MySQL root 密码 |
-| `MYSQL_PORT` | `3306` | 宿主机映射端口 |
+| `MYSQL_PORT` | `3307` | 宿主机映射端口，容器内仍为 `3306` |
 | `DB_URL` | Compose 内部地址 | 后端 JDBC 连接串 |
 
 容器内后端使用主机名 `mysql`，本地启动后端使用 `localhost`。这两个地址不能混用：
 
 ```text
 Docker 后端：jdbc:mysql://mysql:3306/tik_agent
-本地后端：  jdbc:mysql://localhost:3306/tik_agent
+本地后端：  jdbc:mysql://localhost:3307/tik_agent
 ```
 
 #### 5.2 Mock 模型
@@ -282,7 +282,7 @@ curl http://localhost:8080/api/v1/conversations/1/messages
 | --- | --- | --- |
 | 前端 | `http://localhost:5173` | 浏览器访问入口 |
 | 后端 | `http://localhost:8080` | REST、SSE、Actuator |
-| MySQL | `localhost:3306` | 仅本地开发或数据库工具访问 |
+| MySQL | `localhost:3307` | 仅本地开发或数据库工具访问 |
 
 如果端口被占用，在 `.env` 中修改 `UI_PORT`、`SERVER_PORT` 或 `MYSQL_PORT`，并同步确认 `DB_URL` 使用正确的 MySQL 端口。
 
