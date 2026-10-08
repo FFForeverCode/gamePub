@@ -16,7 +16,6 @@
     </option>
     <option name="ignoredFiles">
       <set>
-        <option value="$PROJECT_DIR$/tik-agent/server/pom.xml" />
         <option value="$PROJECT_DIR$/tik-agent/tik-agent-core/pom.xml" />
       </set>
     </option>

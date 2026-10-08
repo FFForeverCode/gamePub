@@ -7,11 +7,11 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <module name="market-manage-server" />
+        <module name="server" />
         <module name="market-server" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
-      <module name="server" target="17" />
       <module name="tik-agent" target="1.5" />
     </bytecodeTargetLevel>
   </component>
