@@ -1,0 +1,214 @@
+# Review package: 42ee13b..1aacf34100da6f932da8c32313876f015a9df8da
+
+## Commits
+1aacf34 fix: enforce atomic generation terminal writes
+
+## Files changed
+ .../conversation/GenerationTerminalService.java    | 56 +++++++++++++++
+ .../conversation/GenerationPersistenceTest.java    | 82 ++++++++++++++++++++++
+ 2 files changed, 138 insertions(+)
+
+## Diff
+diff --git a/tik-agent/server/src/main/java/com/gamepub/server/conversation/GenerationTerminalService.java b/tik-agent/server/src/main/java/com/gamepub/server/conversation/GenerationTerminalService.java
+new file mode 100644
+index 0000000..c615da9
+--- /dev/null
++++ b/tik-agent/server/src/main/java/com/gamepub/server/conversation/GenerationTerminalService.java
+@@ -0,0 +1,56 @@
++package com.gamepub.server.conversation;
++
++import java.time.LocalDateTime;
++import java.util.Objects;
++
++import org.springframework.stereotype.Service;
++import org.springframework.transaction.annotation.Transactional;
++
++@Service
++public class GenerationTerminalService {
++    private final GenerationMapper generationMapper;
++    private final MessageMapper messageMapper;
++
++    public GenerationTerminalService(GenerationMapper generationMapper, MessageMapper messageMapper) {
++        this.generationMapper = generationMapper;
++        this.messageMapper = messageMapper;
++    }
++
++    @Transactional
++    public void finish(String generationId, long fenceEpoch, GenerationStatus expectedStatus,
++                       GenerationStatus terminalStatus, String content, MessageStatus messageStatus,
++                       String errorCode, Long inputTokenCount, Long outputTokenCount) {
++        validateTerminalPair(terminalStatus, messageStatus);
++        ChatGeneration generation = generationMapper.findById(generationId);
++        if (generation == null || generation.getAssistantMessageId() == null) {
++            throw new IllegalStateException("Generation or assistant message is missing");
++        }
++
++        LocalDateTime now = LocalDateTime.now();
++        int generationUpdated = generationMapper.transitionIfCurrent(generationId, fenceEpoch, expectedStatus,
++                terminalStatus, errorCode, inputTokenCount, outputTokenCount, now);
++        if (generationUpdated != 1) {
++            throw new IllegalStateException("Generation is stale or no longer transitionable");
++        }
++
++        int messageUpdated = messageMapper.finishIfGenerationCurrent(generation.getAssistantMessageId(),
++                generationId, fenceEpoch, terminalStatus, content, messageStatus, errorCode, now);
++        if (messageUpdated != 1) {
++            throw new IllegalStateException("Assistant message is stale or no longer transitionable");
++        }
++    }
++
++    private void validateTerminalPair(GenerationStatus generationStatus, MessageStatus messageStatus) {
++        Objects.requireNonNull(generationStatus, "terminalStatus");
++        Objects.requireNonNull(messageStatus, "messageStatus");
++        MessageStatus expectedMessageStatus = switch (generationStatus) {
++            case COMPLETED -> MessageStatus.COMPLETED;
++            case FAILED, RETRYABLE -> MessageStatus.FAILED;
++            case CANCELLED -> MessageStatus.CANCELLED;
++            default -> throw new IllegalArgumentException("Generation status is not terminal");
++        };
++        if (messageStatus != expectedMessageStatus) {
++            throw new IllegalArgumentException("Generation and assistant message terminal states do not match");
++        }
++    }
++}
+diff --git a/tik-agent/server/src/test/java/com/gamepub/server/conversation/GenerationPersistenceTest.java b/tik-agent/server/src/test/java/com/gamepub/server/conversation/GenerationPersistenceTest.java
+index da3a6d1..c81658c 100644
+--- a/tik-agent/server/src/test/java/com/gamepub/server/conversation/GenerationPersistenceTest.java
++++ b/tik-agent/server/src/test/java/com/gamepub/server/conversation/GenerationPersistenceTest.java
+@@ -20,20 +20,23 @@ class GenerationPersistenceTest extends MySqlIntegrationTest {
+ 
+     @Autowired
+     private ConversationMapper conversationMapper;
+ 
+     @Autowired
+     private MessageMapper messageMapper;
+ 
+     @Autowired
+     private GenerationMapper generationMapper;
+ 
++    @Autowired
++    private GenerationTerminalService generationTerminalService;
++
+     @Autowired
+     private JdbcTemplate jdbcTemplate;
+ 
+     @Autowired
+     private TransactionTemplate transactionTemplate;
+ 
+     @Test
+     void migratesGenerationSchemaAndKeepsExistingMessagesUnlinked() {
+         Conversation conversation = insertConversation();
+         Message legacyMessage = insertMessage(conversation.getId(), null);
+@@ -145,20 +148,79 @@ class GenerationPersistenceTest extends MySqlIntegrationTest {
+             assertThat(messageMapper.finishIfGenerationCurrent(assistant.getId(), generation.getId(), 1L,
+                     GenerationStatus.COMPLETED, "answer", MessageStatus.COMPLETED,
+                     null, LocalDateTime.now())).isEqualTo(1);
+             throw new IllegalStateException("force transaction rollback");
+         })).isInstanceOf(IllegalStateException.class).hasMessage("force transaction rollback");
+ 
+         assertThat(generationMapper.findById(generation.getId()).getStatus()).isEqualTo(GenerationStatus.CREATED);
+         assertThat(messageMapper.findById(assistant.getId()).getStatus()).isEqualTo(MessageStatus.STREAMING);
+     }
+ 
++    @Test
++    void commitsGenerationAndAssistantMessageTerminalStateThroughOneServiceTransaction() {
++        Conversation conversation = insertConversation();
++        Message assistant = streamingAssistant(conversation.getId());
++        ChatGeneration generation = generationWithAssistant(conversation.getId(), assistant);
++        generationMapper.create(generation);
++        messageMapper.linkGeneration(assistant.getId(), generation.getId());
++        start(generation);
++
++        generationTerminalService.finish(generation.getId(), 1L, GenerationStatus.RUNNING,
++                GenerationStatus.COMPLETED, "complete answer", MessageStatus.COMPLETED,
++                null, 11L, 22L);
++
++        assertThat(generationMapper.findById(generation.getId()).getStatus())
++                .isEqualTo(GenerationStatus.COMPLETED);
++        assertThat(generationMapper.findById(generation.getId()).getInputTokenCount()).isEqualTo(11L);
++        assertThat(messageMapper.findById(assistant.getId()).getStatus()).isEqualTo(MessageStatus.COMPLETED);
++        assertThat(messageMapper.findById(assistant.getId()).getContent()).isEqualTo("complete answer");
++    }
++
++    @Test
++    void rollsBackGenerationTerminalStateWhenAssistantMessageCannotTransition() {
++        Conversation conversation = insertConversation();
++        Message assistant = streamingAssistant(conversation.getId());
++        ChatGeneration generation = generationWithAssistant(conversation.getId(), assistant);
++        generationMapper.create(generation);
++        messageMapper.linkGeneration(assistant.getId(), generation.getId());
++        start(generation);
++        messageMapper.finish(assistant.getId(), "already terminal", MessageStatus.COMPLETED,
++                null, LocalDateTime.now());
++
++        assertThatThrownBy(() -> generationTerminalService.finish(generation.getId(), 1L,
++                GenerationStatus.RUNNING, GenerationStatus.COMPLETED, "new answer",
++                MessageStatus.COMPLETED, null, null, null))
++                .isInstanceOf(IllegalStateException.class);
++
++        assertThat(generationMapper.findById(generation.getId()).getStatus()).isEqualTo(GenerationStatus.RUNNING);
++        assertThat(messageMapper.findById(assistant.getId()).getContent()).isEqualTo("already terminal");
++    }
++
++    @Test
++    void rejectsStaleEpochWithoutChangingEitherTerminalRecord() {
++        Conversation conversation = insertConversation();
++        Message assistant = streamingAssistant(conversation.getId());
++        ChatGeneration generation = generationWithAssistant(conversation.getId(), assistant);
++        generationMapper.create(generation);
++        messageMapper.linkGeneration(assistant.getId(), generation.getId());
++        start(generation);
++
++        assertThatThrownBy(() -> generationTerminalService.finish(generation.getId(), 2L,
++                GenerationStatus.RUNNING, GenerationStatus.COMPLETED, "stale answer",
++                MessageStatus.COMPLETED, null, null, null))
++                .isInstanceOf(IllegalStateException.class);
++
++        assertThat(generationMapper.findById(generation.getId()).getStatus()).isEqualTo(GenerationStatus.RUNNING);
++        assertThat(messageMapper.findById(assistant.getId()).getStatus()).isEqualTo(MessageStatus.STREAMING);
++        assertThat(messageMapper.findById(assistant.getId()).getContent()).isEmpty();
++    }
++
+     @Test
+     void listsOnlyRunningGenerationsOlderThanCutoff() {
+         Conversation conversation = insertConversation();
+         ChatGeneration stale = generation(conversation.getId(), UUID.randomUUID().toString(), 3L);
+         stale.setStatus(GenerationStatus.RUNNING);
+         stale.setUpdatedAt(LocalDateTime.now().minusMinutes(10));
+         generationMapper.create(stale);
+         ChatGeneration current = generation(conversation.getId(), UUID.randomUUID().toString(), 4L);
+         current.setStatus(GenerationStatus.RUNNING);
+         current.setUpdatedAt(LocalDateTime.now());
+@@ -191,12 +253,32 @@ class GenerationPersistenceTest extends MySqlIntegrationTest {
+         generation.setConversationId(conversationId);
+         generation.setClientRequestId(requestId);
+         generation.setModelId("mock");
+         generation.setStatus(GenerationStatus.CREATED);
+         generation.setFenceEpoch(epoch);
+         generation.setCreatedAt(now);
+         generation.setUpdatedAt(now);
+         return generation;
+     }
+ 
++    private Message streamingAssistant(long conversationId) {
++        LocalDateTime now = LocalDateTime.now();
++        Message assistant = new Message(null, conversationId, MessageRole.ASSISTANT, "",
++                MessageStatus.STREAMING, "mock", 1L, null, now, now);
++        messageMapper.insert(assistant);
++        return assistant;
++    }
++
++    private ChatGeneration generationWithAssistant(long conversationId, Message assistant) {
++        ChatGeneration generation = generation(conversationId, UUID.randomUUID().toString(), 1L);
++        generation.setAssistantMessageId(assistant.getId());
++        return generation;
++    }
++
++    private void start(ChatGeneration generation) {
++        assertThat(generationMapper.transitionIfCurrent(generation.getId(), generation.getFenceEpoch(),
++                GenerationStatus.CREATED, GenerationStatus.RUNNING, null, null, null,
++                LocalDateTime.now())).isEqualTo(1);
++    }
++
+     private record GenerationClaim(long conversationId, long epoch) { }
+ }

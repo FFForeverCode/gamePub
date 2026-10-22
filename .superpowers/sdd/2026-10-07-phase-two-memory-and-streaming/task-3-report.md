@@ -27,3 +27,28 @@ Generation creation and generation/message terminal writes are transaction-compo
 ## Commit
 
 `feat: persist idempotent chat generations`
+
+## Transaction Boundary Follow-up
+
+### Changes
+
+- Added `GenerationTerminalService.finish(...)` as the production transaction boundary for generation and assistant-message terminal writes.
+- The service validates compatible terminal status pairs, checks the database fence epoch and expected generation state, and throws if either conditional update does not affect exactly one row so Spring rolls back the paired writes.
+- Added integration coverage for paired completion, rollback when the assistant message cannot transition, and stale-epoch rejection.
+
+### TDD Evidence
+
+- RED: `mvn -Dtest=GenerationPersistenceTest test` failed at test compilation because `GenerationTerminalService` did not exist.
+- GREEN: With Java 17, `mvn -Dtest=GenerationPersistenceTest test` passed: 10 tests, 0 failures, 0 errors, 0 skipped. MySQL 8.4 Testcontainers applied Flyway V1 and V2.
+- Output includes an existing Netty macOS DNS native-library load error with fallback to system defaults and a JVM class-sharing warning. These did not fail the tests; no dependency or logging changes were made solely to suppress environment noise.
+
+### Files Changed
+
+- `server/src/main/java/com/gamepub/server/conversation/GenerationTerminalService.java`
+- `server/src/test/java/com/gamepub/server/conversation/GenerationPersistenceTest.java`
+
+### Self-Review
+
+- Terminal state mappings are constrained to `COMPLETED` -> `COMPLETED`, `FAILED`/`RETRYABLE` -> `FAILED`, and `CANCELLED` -> `CANCELLED`.
+- The assistant message ID is loaded from the generation row rather than supplied independently by callers.
+- The transaction rolls back if the generation is stale or if the assistant message was already terminal.
